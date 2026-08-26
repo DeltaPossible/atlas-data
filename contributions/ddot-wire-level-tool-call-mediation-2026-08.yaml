@@ -1,0 +1,247 @@
+contact:
+  name: Michael Dallas Keaton (Divinitec, LLC)
+  emails: mdallas@ddot.build
+additional-info: 'Contribution from Divinitec, LLC (ddot). Proposes three deployment-stage Mitigation
+  objects for the AI-agent tool-call attack cluster and six clean-room, synthetic reproduce-then-block
+  Case Studies. Every case drives the shipping ddot binaries with a three-way control (ddot removed /
+  ddot present with empty policy / ddot enforcing), isolating each block to the policy decision, and exports
+  a tamper-evident SHA-256 hash-chained audit record a reviewer can independently re-verify. The supply-chain
+  rug-pull case additionally anchors the approved manifest hash to the Bitcoin main chain (OP_RETURN,
+  txid 569f9811...). Honest scope: these objects address the agent tool-call cluster only, not model evasion
+  or poisoning; the mitigations cite and complement the existing configuration-oriented mitigations (M0028-M0033)
+  by adding a live, wire-level enforcement point. A one-command reproducible harness and full white paper
+  are available on request. This PR augments the same content submitted via the /contribute form on 2026-08-22.
+  Object IDs (AML.M/AML.CS) are left for the ATLAS team to assign on acceptance.'
+submissions:
+- object-type: mitigation
+  name: Wire-Level AI Agent Tool-Call Mediation
+  description: 'Interpose a policy-enforcing proxy directly on the transport channel between an AI agent
+    and the tools it invokes (for example, the Model Context Protocol stdio / JSON-RPC boundary), so every
+    tool call is authorized against a signed allow-list and recorded before it reaches the tool. Unlike
+    configuration-based controls that depend on each tool or server enforcing its own policy, wire-level
+    mediation enforces a single, centrally defined policy at the point of invocation and is independent
+    of the agent''s reasoning: an agent manipulated (for example via prompt or context injection) into
+    attempting a disallowed tool call still has that call refused at the wire. Enforcement is paired with
+    a tamper-evident, SHA-256 hash-chained audit record of every allowed and blocked call, so each decision
+    is independently verifiable rather than merely logged.'
+  techniques:
+  - id: AML.T0053
+    use: A centrally defined allow-list refuses tool invocations that are not explicitly permitted, at
+      the point of invocation, independent of whether the calling agent has been manipulated.
+  - id: AML.T0086
+    use: Exfiltration attempted through a tool invocation is refused when the tool or destination is not
+      permitted by policy; the blocked call and its arguments are captured in the tamper-evident record.
+  - id: AML.T0101
+    use: Destructive tool invocations (for example delete or drop operations) are refused at the wire
+      before reaching the tool unless explicitly sanctioned.
+  - id: AML.T0098
+    use: Tool calls that would read or return credentials are refused at the wire when they are not on
+      the policy allow-list.
+  - id: AML.T0115
+    use: A poisoned tool or artifact published to a registry is absent from the session's signed allow-list
+      and is refused at its first invocation at the wire, regardless of how or where it was published.
+  - id: AML.T0011.002
+    use: A poisoned tool is refused at the wire when it is not present in the signed manifest or policy
+      allow-list for the session.
+  - id: AML.T0110
+    use: A tool whose runtime identity does not match its signed manifest is refused before it is spawned;
+      undeclared tools presented at runtime are not forwarded.
+  - id: AML.T0080
+    use: 'Instructions injected into the agent''s context cannot widen its effective capability: any tool
+      call the injection induces remains subject to the wire-level allow-list and is refused if not permitted.'
+  - id: AML.T0085.001
+    use: Access to the agent's tools as a collection is constrained to the policy allow-list at the transport
+      boundary, and every access is attributed to the originating session.
+  - id: AML.T0099
+    use: Poisoned data returned by a tool is captured in the tamper-evident record for detection, and
+      any downstream tool call it induces remains gated by the allow-list.
+  ml-lifecycle:
+  - Deployment
+  - Technical - Cyber
+- object-type: mitigation
+  name: Cryptographic and On-Chain Tool Provenance
+  description: Bind every agent tool to a cryptographically signed manifest and, at approval time, commit
+    the manifest's SHA-256 hash to a public, immutable ledger (an OP_RETURN transaction on the Bitcoin
+    main chain). Manifests are signed with a hybrid classical and post-quantum scheme (Ed25519 with ML-DSA-65,
+    FIPS 204), so a single broken algorithm does not defeat verification. A tool's manifest signature
+    is verified before execution; because the approved hash is anchored on an independent public ledger,
+    any post-approval change to a tool is detectable by anyone and cannot be backdated or disputed, converting
+    a silent supply-chain substitution into a publicly provable, refused event.
+  techniques:
+  - id: AML.T0109
+    use: The approved manifest hash is committed to a public ledger; a tool swapped after adoption produces
+      a hash that no longer matches the anchored record, so the rug pull is detected and the changed tool
+      is refused before execution.
+  - id: AML.T0115
+    use: A published poisoned artifact must present a valid signature chain matching the approved, ledger-anchored
+      hash to be installed or executed; an unsigned or altered published artifact is rejected before use.
+  - id: AML.T0011.002
+    use: A poisoned tool cannot present a manifest signature matching the approved, anchored hash, so
+      its substitution is detected.
+  - id: AML.T0110
+    use: Corruption of a previously trusted tool breaks its manifest signature and the match against the
+      anchored hash, and is refused.
+  - id: AML.T0081
+    use: Modification of an agent's tool configuration changes the signed manifest; the mismatch against
+      the anchored hash surfaces the tampering.
+  ml-lifecycle:
+  - Deployment
+  - Technical - Cyber
+- object-type: mitigation
+  name: Prompt-Injection Airgap Firewall
+  description: Structurally separate untrusted tool and data output from trusted instructions before it
+    reaches the model, so content returned by a tool cannot be interpreted as a command. Untrusted content
+    is wrapped in explicit boundaries and marked as data, instructions are anchored redundantly around
+    it, the content is schema-validated upstream, and the model's response is checked against a canary
+    token so a hijacked response is detected. This bounds indirect prompt injection at the point of ingestion,
+    upstream of any tool call, and complements wire-level mediation which blocks the downstream action.
+  techniques:
+  - id: AML.T0080
+    use: Injected instructions arriving in tool or document output are structurally isolated as untrusted
+      data and cannot be promoted to commands; a canary check flags a response that was nonetheless hijacked.
+  - id: AML.T0099
+    use: Poisoned data returned by a tool is quarantined behind explicit untrusted boundaries and schema
+      validation before it can influence the model.
+  ml-lifecycle:
+  - Deployment
+  - Technical - Cyber
+- study:
+    name: Data Exfiltration via AI Agent Tool Invocation, Refused at the Wire
+    summary: An MCP tool advertised as a notes backup reads a private secrets file and transmits it to
+      an attacker destination on invocation. With ddot removed the call executes and the synthetic secret
+      is exfiltrated; with ddot enforcing a signed allow-list the identical call is refused at the transport
+      before reaching the tool. A three-way control (ddot off, ddot on with empty policy, ddot on enforced)
+      isolates the block to the policy decision. The blocked verdict is written to a tamper-evident SHA-256
+      audit chain, verified intact.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0005
+      technique: AML.T0053
+      description: The agent invokes a connected MCP tool over the JSON-RPC tools/call channel.
+    - tactic: AML.TA0010
+      technique: AML.T0086
+      description: The tool exfiltrates a private secrets file through the agent's own tool call; under
+        enforcement ddot refuses the call at the wire and captures it.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - &id001
+      title: ddot x MITRE ATLAS white paper (method, scope, evidence)
+      url: https://atlas.iipossible.com
+    incident-date-granularity: DATE
+    case-study-type: exercise
+- study:
+    name: Data Destruction via AI Agent Tool Invocation, Refused at the Wire
+    summary: A tool advertised as a temporary-file cleanup deletes a synthetic project tree on invocation.
+      With ddot removed the deletion completes; with ddot enforcing policy the destructive call is refused
+      at the wire and the files survive. Evidence is exported to a tamper-evident SHA-256 chain, verified
+      intact.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0005
+      technique: AML.T0053
+      description: The agent invokes the cleanup tool over the tools/call channel.
+    - tactic: AML.TA0011
+      technique: AML.T0101
+      description: The tool destroys synthetic project files; under enforcement ddot refuses the destructive
+        call before it reaches the tool.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - *id001
+    incident-date-granularity: DATE
+    case-study-type: exercise
+- study:
+    name: AI Agent Tool Credential Harvesting, Refused at the Wire
+    summary: A tool advertised as a project-config reader lifts a synthetic .env of credentials on invocation.
+      With ddot removed the secrets are harvested; with ddot enforcing policy the call is refused at the
+      wire and the credentials never leave via the tool. Evidence is exported to a tamper-evident chain,
+      verified intact.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0005
+      technique: AML.T0053
+      description: The agent invokes the config-reader tool over the tools/call channel.
+    - tactic: AML.TA0013
+      technique: AML.T0098
+      description: The tool reads and returns a synthetic credentials file; under enforcement ddot refuses
+        the call at the wire.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - *id001
+    incident-date-granularity: DATE
+    case-study-type: exercise
+- study:
+    name: Poisoned AI Agent Tool (Benign Name, Malicious Body), Refused at the Wire
+    summary: A tool advertised as a weather lookup secretly reads private notes on invocation, a behavior
+      that betrays its declared description. With ddot removed the poisoned read executes; with ddot enforcing
+      policy the poisoned tool is refused at the wire. Evidence is exported to a tamper-evident chain,
+      verified intact.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0006
+      technique: AML.T0110
+      description: A tool the agent trusts is poisoned so its behavior diverges from its description.
+    - tactic: AML.TA0005
+      technique: AML.T0053
+      description: The agent invokes the poisoned tool; under enforcement ddot refuses the call at the
+        wire.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - *id001
+    incident-date-granularity: DATE
+    case-study-type: exercise
+- study:
+    name: AI Supply Chain Rug Pull, Detected and Refused by Signed and On-Chain Provenance
+    summary: A trusted, signed tool is swapped for a malicious version after approval (its command and
+      declared tools are changed) while its signature is left stale. Before the swap, verification passes
+      and the tool spawns; after the swap, ddot's manifest signature verification fails and the tool is
+      refused before it can spawn. The approved manifest's SHA-256 hash is committed to the Bitcoin main
+      chain, so the change is provable against an immutable public ledger by anyone.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0007
+      technique: AML.T0109
+      description: A benign, approved tool is replaced with a malicious manifest after adoption; ddot
+        detects the manifest / signature mismatch and refuses the tool before spawn, and the approved
+        hash is verifiable on-chain.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - *id001
+    - title: Bitcoin mainnet OP_RETURN anchoring the approved manifest SHA-256 (rug-pull proof)
+      url: https://mempool.space/tx/569f981174e743697522256fe0862fdcf512e0f797a8ba9c019db3f58cfd2a79
+    incident-date-granularity: DATE
+    case-study-type: exercise
+- study:
+    name: Context Poisoning Weaponized as Tool Actions, Walled Off by the Capability Boundary
+    summary: A poisoned inbox message instructs the agent that it is now authorized to post to a social
+      platform. The agent obeys and attempts three posting tools. With ddot removed all three posts are
+      sent; with ddot enforcing a signed manifest that declares only the read capability, the benign read
+      is allowed (the injection lands in the model) but every posting call is refused with "not in manifest".
+      The injection cannot widen the agent's permissions because the capability boundary is enforced at
+      the wire, not in the model's reasoning.
+    incident-date: '2026-08-22'
+    procedure:
+    - tactic: AML.TA0006
+      technique: AML.T0080
+      description: Adversarial content injected into the agent's context via tool output instructs it
+        to take an unauthorized action.
+    - tactic: AML.TA0005
+      technique: AML.T0053
+      description: The manipulated agent attempts the induced tool calls; under enforcement every call
+        outside the signed manifest is refused at the wire.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: Clean-room MCP tool harness, synthetic data only
+    actor: Security research, controlled demonstration
+    references:
+    - *id001
+    incident-date-granularity: DATE
+    case-study-type: exercise
