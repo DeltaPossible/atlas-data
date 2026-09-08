@@ -1,0 +1,96 @@
+contact:
+  name: Michael Dallas Keaton (Divinitec, LLC)
+  emails: mdallas@ddot.build
+additional-info: 'Second contribution from Divinitec, LLC (ddot), following the outbound wire-level tool-call
+  mediation contribution. This adds the inbound direction: admitting or refusing the connecting agent
+  itself at the transport, by cryptographic challenge-response against a signed authorized-agents manifest,
+  before the agent can operate. The accompanying case study (cs07) is a reproducible, clean-room exercise
+  that drives the real shipping ddot-gateway admission code through a three-way control (admission off
+  / permissive with empty policy / enforced) plus two selective-enforcement proofs (an authorized agent
+  with a valid signature is admitted; a forged identity is refused), sealing every verdict in a tamper-evident
+  SHA-256 hash chain a reviewer can re-verify with a single command. The provenance root of the implementing
+  source, specification, and evidence chain is anchored on the Bitcoin main chain (OP_RETURN, txid 4dde59d379fc66737e68bd467f60bb1e1072d5d6fe51418cca131868d21c7006).
+  The mitigation maps to existing techniques (AML.T0103, T0108, T0073, T0091) rather than proposing new
+  ones, and is distinct from the existing agent mitigations (AML.M0026 through M0038: agent permissions
+  configuration, human-in-the-loop, scope-drift detection, input/output validation, component segmentation):
+  it is the cryptographic admission/authentication primitive upstream of those permission and scope controls,
+  and does not duplicate them. Case-study tactic placements are our best mapping; please adjust as appropriate.
+  A public white paper is at https://shimwall.iipossible.com . This PR augments the same content submitted
+  via the /contribute form on 2026-09-08. Object IDs (AML.M/AML.CS) are left for the ATLAS team to assign
+  on acceptance.'
+submissions:
+- object-type: mitigation
+  name: Wire-Level AI Agent Admission Control (Shimwall)
+  mitigation-category: Technical - Cyber
+  description: Interpose a policy-enforcing gate on the transport channel by which an AI agent would operate
+    (for example the Model Context Protocol stdio / JSON-RPC boundary, or an agent-to-agent channel) and
+    admit the connecting agent only when it proves possession of a private key bound to an identity in
+    a cryptographically signed authorized-agents manifest, by signing a gate-issued challenge. Whereas
+    tool-call mediation authorizes what an already-connected agent may do, admission control answers the
+    antecedent question of whether the connecting agent is an authorized principal at all. Because the
+    admitted identity must both appear in the signed manifest and demonstrate possession of the corresponding
+    private key over a fresh challenge, a self-declared identifier cannot admit an agent, an assertion
+    replayed or copied from a legitimate agent does not admit a different agent, and an authorized identifier
+    signed with the wrong key (a forgery) is refused. Enforcement is at the transport and independent
+    of the agent's reasoning, is selective rather than a blanket denial (an authorized agent presenting
+    a valid proof is admitted), and every admission decision is written to a tamper-evident SHA-256 hash-chained
+    audit record that is independently verifiable.
+  techniques:
+  - id: AML.T0103
+    use: An adversary launches or connects an AI agent in the victim's environment to act on their behalf;
+      the admission gate refuses that agent at the wire unless it produces a signature, over the gate's
+      fresh challenge, by a private key whose public key is in the signed authorized-agents manifest.
+      An unauthorized deployed agent (absent from the manifest) is refused before it can operate, and
+      the refusal and its reason are captured in the tamper-evident record.
+  - id: AML.T0108
+    use: An adversary attempting to abuse an agent on the channel as a command-and-control foothold cannot
+      operate it unless the agent proves an authorized identity; admission control denies an unauthorized
+      or co-opted agent access to the channel at all, upstream of any tool it might invoke.
+  - id: AML.T0073
+    use: 'An agent presenting an authorized identifier it cannot cryptographically prove (a forged identity:
+      an authorized public key signed by a different private key) fails signature verification over the
+      gate challenge and is refused, so impersonation of an authorized agent is defeated at the admission
+      boundary.'
+  - id: AML.T0091
+    use: Because admission requires a signature over a fresh, single-use challenge rather than a bearer
+      token or self-declared identifier, an assertion replayed or copied from a legitimate agent does
+      not admit a different agent, countering reuse of captured authentication material to obtain agent
+      access on the channel.
+  ml-lifecycle:
+  - Deployment
+  - Monitoring and Maintenance
+- study:
+    name: Unauthorized AI Agent Admission, Refused at the Wire
+    summary: 'An unauthorized autonomous agent attempts to attach to and operate over a tool-invocation
+      channel. The real ddot-gateway admission decision (verify_admission) is exercised through a three-way
+      control: with admission off the unauthorized agent operates (the attack is real); with the gate
+      permissive and an empty policy the agent still operates, proving the gate is a faithful transparent
+      proxy and not a source of breakage; with admission enforced the agent''s identity is absent from
+      the signed authorized-agents manifest and it is refused at the wire. Two controls prove enforcement
+      is selective, not blanket: an authorized agent presenting a valid Ed25519 signature over the gate
+      nonce is admitted, and a forged identity (an authorized public key signed by a different key) is
+      refused for bad signature. Every verdict is sealed into a tamper-evident SHA-256 hash chain, verified
+      intact, reproducing identically on every run. Clean-room: synthetic deterministic keys, throwaway
+      state, no network. Runs the exact shipping library code offered for evaluation (crates/ddot-gateway/src/admission.rs).'
+    incident-date: '2026-09-06'
+    incident-date-granularity: DATE
+    case-study-type: exercise
+    procedure:
+    - tactic: AML.TA0005
+      technique: AML.T0103
+      description: An unauthorized autonomous agent is launched and attempts to attach to and operate
+        over the tool-invocation channel; under enforcement the ddot admission gate refuses it at the
+        wire because its identity is not in the signed authorized-agents manifest, and captures the refusal.
+    - tactic: AML.TA0007
+      technique: AML.T0073
+      description: A forged identity (an authorized public key signed by a different private key) attempts
+        admission; signature verification over the gate challenge fails and the agent is refused for bad
+        signature, defeating impersonation of an authorized agent.
+    reporter: Divinitec, LLC (Michael Dallas Keaton; George David Keaton, CPA)
+    target: ddot clean-room agent-admission harness (synthetic test system, no production data)
+    actor: Divinitec, LLC (ddot) security research, controlled demonstration
+    references:
+    - title: ddot Shimwall white paper (method, scope, evidence)
+      url: https://shimwall.iipossible.com
+    - title: On-chain provenance (Bitcoin OP_RETURN)
+      url: https://mempool.space/tx/4dde59d379fc66737e68bd467f60bb1e1072d5d6fe51418cca131868d21c7006
